@@ -15,36 +15,38 @@
   nix-update-script,
 }:
 let
-  joinPatches = x: map (patch: ./patches + "/./${patch}") x;
+  joinPatches = x: map (patch: ./patches + "/./${patch}.patch") x;
 
-  mapRev = 250713;
+  mapRev = 250822;
 
   worldMap = fetchurl {
-    url = "https://cdn.comaps.app/maps/${toString mapRev}/World.mwm";
-    hash = "sha256-nHXc8O8Am4P2quR0KdS3qClWc+33hDLg6sG3Fch2okA=";
+    url = "https://cdn-fi-1.comaps.app/maps/${toString mapRev}/World.mwm";
+    hash = "sha256-OksUAix8yw0WQiJUwfMrjOCd/OwuRjdCOUjjGpnG2S8=";
   };
 
   worldCoasts = fetchurl {
-    url = "https://cdn.comaps.app/maps/${toString mapRev}/WorldCoasts.mwm";
-    hash = "sha256-HOnu8rETA0DVrq1hpQc72oPJWiGmGM00KTLIWYTqlIo=";
+    url = "https://cdn-fi-1.comaps.app/maps/${toString mapRev}/WorldCoasts.mwm";
+    hash = "sha256-1OvKZJ3T/YJu6t/qTYliIVkwsT8toBSqGHUpDEk9i2k=";
   };
 in
 organicmaps.overrideAttrs (oldAttrs: rec {
   pname = "comaps";
-  version = "2025.08.13-8";
+  version = "2025.08.31-15";
 
   src = fetchFromGitea {
     domain = "codeberg.org";
     owner = "comaps";
     repo = "comaps";
     tag = "v${version}";
-    hash = "sha256-kvE3H+siV/8v4WgsG1Ifd4gMMwGLqz28oXf1hB9gQ2Q=";
+    hash = "sha256-uRShcyMevNb/UE5+l8UabiGSr9TccVWp5xVoqI7+Oh8=";
     fetchSubmodules = true;
   };
 
   patches = joinPatches [
-    "remove-lto.patch"
-    "use-vendored-protobuf.patch"
+    "remove-lto"
+    "use-vendored-protobuf"
+
+    "fix-editor-tests"
   ];
 
   nativeBuildInputs = (builtins.filter (x: x != python3) oldAttrs.nativeBuildInputs or [ ]) ++ [
@@ -60,16 +62,15 @@ organicmaps.overrideAttrs (oldAttrs: rec {
     gflags
     glm
     imgui
-
-    (jansson.overrideAttrs (oa: {
-      postFixup = (oa.postFixup or "") + ''
-        substituteInPlace $dev/lib/cmake/jansson/janssonTargets-release.cmake \
-          --replace-fail "\''${_IMPORT_PREFIX}" "$out"
-      '';
-    }))
-
+    jansson
     utf8cpp
   ];
+
+  postPatch = ''
+    patchShebangs 3party/boost/tools/build/src/engine/build.sh
+    install -Dm644 ${worldMap} data/World.mwm
+    install -Dm644 ${worldCoasts} data/WorldCoasts.mwm
+  '';
 
   preConfigure = ''
     bash ./configure.sh --skip-map-download
@@ -87,8 +88,6 @@ organicmaps.overrideAttrs (oldAttrs: rec {
   };
 
   postInstall = ''
-    install -Dm644 ${worldMap} $out/share/comaps/data/World.mwm
-    install -Dm644 ${worldCoasts} $out/share/comaps/data/WorldCoasts.mwm
     ln -s $out/bin/CoMaps $out/bin/comaps
   '';
 
